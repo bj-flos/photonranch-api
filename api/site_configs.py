@@ -23,11 +23,18 @@ def get_all_sites() -> list:
     return [ entry['site'] for entry in config_entries ]
 
 
-def get_config(site: str) -> dict:
-    """Helper to retrieve the config details for a given site."""
-    
-    result = config_table.get_item(Key = { "site": site }) 
-    return result['Item']
+def get_site_config(site: str) -> dict:
+    """Helper to retrieve the config details for a given site.
+
+    Renamed off get_config: the handler below had the same name and, being
+    defined second, replaced this one entirely. Nothing could reach it, and
+    anything that tried would have called the handler with a sitecode where it
+    expected an API Gateway event. Returns None when the site has no config,
+    rather than raising KeyError at the caller.
+    """
+
+    result = config_table.get_item(Key = { "site": site })
+    return result.get('Item')
 
 
 ############################
@@ -46,6 +53,11 @@ def get_config(event, context):
 
     site = event['pathParameters']['site']
     config = config_table.get_item(Key = { "site": site })
+    # get_item returns a response with no 'Item' when the key is not there, so
+    # subscripting it raised KeyError and an unknown sitecode came back as a
+    # 500. A site that does not exist is a perfectly ordinary request to make.
+    if 'Item' not in config:
+        return http_response(HTTPStatus.NOT_FOUND, f"No config exists for site {site}")
     return http_response(HTTPStatus.OK, config['Item'])
 
 
